@@ -1,0 +1,8 @@
+pillow>=10
+numpy>=1.24
+playwright>=1.40
+faster-whisper>=1.0
+pypinyin>=0.50
+imageio-ffmpeg>=0.4
+# 可选：只在 VOICE=edge（用 edge-tts 备用配音）时需要
+# edge-tts>=6.1

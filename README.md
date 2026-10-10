@@ -1,63 +1,88 @@
 # nonameskill：一句话，让 AI 出一条 1 分钟科技短视频
 
-一个 [Agent Skill](https://agentskills.io)（Claude Code 里用，格式是开放标准）。
-跟 AI 说一句「按那套流程做一期」，它就照着 `SKILL.md` 一步步走：
+一个 [Agent Skill](https://agentskills.io)：装好后，跟你的 AI 编程助手（Claude Code 等支持 skills 的 agent）说一句「按那套流程做一期」，它就照着 `SKILL.md` 一步步走：
 
-选热点 → 选题诊断 → 核实官方来源 → 抓官方截图 → 按「七条爆款规律」写分镜 → 去 AI 味 → 配音并逐段听写自检 → 代码渲染画面 → 生成封面 → 抽帧检查 → 交样片
+选热点 → 选题诊断 → 核实官方来源 → 抓官方截图 → 按「七条爆款规律」写分镜 → 去 AI 味 → 配音并逐段听写自检 → 代码渲染画面 → 生成封面 → 抽帧检查 → **交付样片，停在发布前**
 
-最后一步写死了：**只出样片，不发布**，等人看过点头。
+画面全部由代码逐帧绘制（不用视频生成模型），口播是中文，成片 1080×1920 竖屏、约 1 分钟。
 
-> 视频号「全球科技.」/ 公众号「硅谷趣闻」那期《一句话，让AI出视频：全流程公开》就是它做的，分镜和封面提示词都在 `examples/skill_intro/`。
+## 安装
+
+```bash
+# 1. 装这个 skill（任选一种）
+npx skills add ForNoonee/nonameskill
+#    或手动：git clone 后把整个文件夹复制到 ~/.claude/skills/nonameskill
+
+# 2. 装渲染引擎（另一个开源 skill，MIT）
+npx skills add alchaincyf/huashu-art-motion
+
+# 3. 装 Python 依赖（Python 3.10+）
+pip install -r ~/.claude/skills/nonameskill/requirements.txt
+
+# 4. 自检：缺什么会逐项提示
+python ~/.claude/skills/nonameskill/scripts/doctor.py
+```
+
+另外需要：**ffmpeg**、**Google Chrome**（渲染引擎调用系统 Chrome），以及一个 **Gemini API key**（[Google AI Studio](https://aistudio.google.com/api-keys) 免费申请）。key 请自己写进 `~/.config/gemini/api_key`，或设环境变量 `GEMINI_API_KEY`。**不要把 key 发给 AI，也不要提交进仓库。**
+
+## 用法
+
+在任意项目里跟 agent 说：
+
+- 「nonameskill，选一期最新的 AI 热点做个样片」
+- 「按那套流程，把这条新闻做成 1 分钟视频：<链接>」
+
+成片放在当前目录的 `noname-videos/<slug>/out/` 下（可用 `NONAME_WORKSPACE` 改）。
+
+## 可选配置
+
+| 环境变量 | 作用 |
+| --- | --- |
+| `NONAME_WORKSPACE` | 成片工作区，默认 `./noname-videos` |
+| `GEMINI_API_KEY` / `GEMINI_API_KEYS` | Gemini key（多个用逗号分隔，会轮流用）；也可放在 `~/.config/gemini/api_key`、`api_key2`…… |
+| `GEMINI_TTS_MODELS` | 固定配音模型，例如 `gemini-3.8-flash-lite-tts` |
+| `HUASHU_ENGINE` | 渲染引擎目录（不在默认 skill 目录时设置） |
+| `NONAME_FONT` | 字幕中文字体文件（找不到系统字体时设置） |
+| `NONAME_MUSIC_DIR` | 背景音乐文件夹；不设就不加 BGM。请只放你有授权的曲子 |
+| `VOICE=edge` | 改用 edge-tts 备用配音（需 `pip install edge-tts`） |
+
+封面：装了 [Codex CLI](https://github.com/openai/codex) 会自动生成；没装就输出提示词，用任意图像工具出图。想统一风格，可以在 `templates/` 放一张**你自己有版权的** `ref_cover.jpg`，每期会自动带上作为参考。
+
+搭配使用效果更好（可选，没装也能跑）：[dbskill](https://github.com/dontbesilent2025/dbskill)（`dbs-content` 选题诊断、`dbs-ai-check` AI 味检测）、`humanizer-zh`（中文去 AI 味改写）。
 
 ## 目录
 
 ```
-nonameskill/                 ← 整个文件夹就是 skill，放进 skills 目录即可
-├── SKILL.md                 流程说明（AI 读的就是它）
-├── references/deai_rules.md 去 AI 味规则：新闻腔、套话、模板句……
-├── scripts/                 7 个小脚本：找候选、建目录、抓图、去AI味扫描、听写自检、封面、收尾抽帧
-└── template/                分镜模板、构建脚本、封面提示词模板
-examples/skill_intro/        这期视频的分镜 ep01b.py、配图脚本、封面提示词和封面
-extras/make_audio_gemini.py  Gemini TTS 配音封装（Charon 声音，多 key 轮询、模型轮换、429 自动等待）
+SKILL.md                 agent 读的流程说明
+scripts/
+  doctor.py              环境自检
+  candidates.py          aihot 热点榜 + 已做标记；--story N 看事件详情
+  new_episode.py         建一期目录、登记选题
+  fetch_images.py        抓官方/报道配图，出带标签的拼图
+  deai_lint.py           扫口播里的 AI 味
+  build.py               配音 + 渲染 + 字幕 + 拼接
+  tts_gemini.py          Gemini TTS（Charon，多 key 轮询、模型轮换、限速自动等待）
+  asr_check.py           配音逐段听写，对照原稿
+  cover.py               生成封面
+  finish.py              叠封面、抽帧拼图、听写报告
+templates/               分镜模板、封面提示词模板
+references/deai_rules.md 去 AI 味规则
+examples/                两份成品分镜，参考写法
 ```
 
-## 怎么装
+## 注意
 
-```bash
-# 个人用（所有项目都能用）
-cp -r nonameskill ~/.claude/skills/
-# 或只给某个项目用
-cp -r nonameskill <你的项目>/.claude/skills/
-```
-
-脚本里的项目根目录用环境变量 `NONAME_ROOT`，不设就用当前目录。
-
-## 先说清楚：哪些能直接用，哪些要自己补
-
-这份 skill 是从作者自己的视频项目里拿出来的，**流程和规则是完整的，脚本是参考实现**：
-
-- 能直接用的：
-  - `SKILL.md` 里的流程，`references/deai_rules.md` 里的去 AI 味规则
-  - `scripts/deai_lint.py`：扫口播稿里的 AI 味
-  - `extras/make_audio_gemini.py`：Gemini 配音
-  - `scripts/cover.sh`：需要先装 Codex CLI
-- 要自己补的（作者项目里的其他模块，没放进来）：
-  - 渲染引擎 `huashu_scripts`
-  - 排版工具 `build_ep1.py`
-  - 热点抓取 `auto/pipeline.py`（读 aihot.news 的 API；个人使用免费，商用要书面授权）
-  - 配乐 `bgm` / `musiclib`
-  - 听写比对用的 `clone_voice._cer`
-  - 不用这些也能照着 `SKILL.md` 走，换成你自己的渲染、配音工具就行。
-- 流程里调用的别家 skill，要另外装：dbskill（`dbs-content`、`dbs-ai-check`）、`humanizer-zh`、`guoshen`。
-- Gemini API key 自己申请，放在 `~/.config/gemini/api_key`。**不要把 key 提交进仓库。**
-- 封面风格参考图没放进来（原图是别人的版权素材）。想统一风格，就在 `template/` 放一张自己的 `ref_cover.jpg`。
+- 热点数据来自 [aihot.news](https://aihot.news) 的官方 Agent API：个人使用免费，**商用需向其取得书面授权**。
+- Gemini 免费档按「每个 key × 每个模型」限额，一期 7~8 段口播会用掉 7~8 次调用。
+- 抓来的新闻配图、官方截图版权归原作者，发布时请标明图源并自行确认可用。
+- 这个 skill 只做到样片为止，不会替你发布到任何平台。
 
 ## 写这个 skill 时学到的三件事
 
 1. 开头两行简介决定 AI 用不用它，要写你平时怎么叫它（「按那套流程做一期」）。
-2. 步骤里别光写「必须」，把原因和吃过的亏写上，比如「不能靠排列位置猜编号（2026-10-10 因此连续两次放错图）」。
-3. 第一版肯定不好用，头一天就改了好几轮。
+2. 步骤里别光写「必须」，把原因和吃过的亏写上，比如「对着标签选图，不要按排列位置猜编号（这样放错过图）」。
+3. 第一版肯定不好用：「七条爆款规律」一开始写成了固定句式，结果每期都一个腔调，后来才改成「七条是目的，不是句式」。
 
 ## 许可证
 
-MIT，见 [LICENSE](LICENSE)。流程里调用的别家 skill（dbskill、humanizer-zh、guoshen）和渲染引擎按它们各自的许可证使用，不包含在本仓库内。
+MIT，见 [LICENSE](LICENSE)。渲染引擎 huashu-art-motion、dbskill 等按各自的许可证使用，不包含在本仓库内。
